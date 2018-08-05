@@ -82,7 +82,7 @@ public class WorleyCaveGenerator extends MapGenCaves
 		}
 		
 		debugValueAdjustments();
-		boolean logTime = false;
+		boolean logTime = true;
 		long millis = 0;
 		if(logTime)
 		{
@@ -108,7 +108,8 @@ public class WorleyCaveGenerator extends MapGenCaves
 
 	protected void generateWorleyCaves(World worldIn, int chunkX, int chunkZ, ChunkPrimer chunkPrimerIn)
     {
-		float[][][] samples = sampleNoise(chunkX, chunkZ);
+		int[][] surfaceHeight = getSurfaceHeight(chunkPrimerIn);
+		float[][][] samples = sampleNoise(chunkX, chunkZ, surfaceHeight);
         float oneQuarter = 0.25F;
         float oneHalf = 0.5F;
         float cutoffAdjuster = 0F;
@@ -121,8 +122,9 @@ public class WorleyCaveGenerator extends MapGenCaves
 			for (int z = 0; z < 4; z++)
 			{
 				int depth = 0;
+				int maxCaveHeight = (surfaceHeight[x][z]+1)/2;
 				//each chunk divided into 64 subchunks along Y axis. Need lots of y sample points to not break things
-				for(int y = 63; y >= 0; y--)
+				for(int y = maxCaveHeight; y >= 0; y--)
 				{
 					//grab the 8 sample points needed from the noise values
 					float x0y0z0 = samples[x][y][z];
@@ -176,24 +178,24 @@ public class WorleyCaveGenerator extends MapGenCaves
                             	int localZ = subz + z*4;
                             	int realZ = localZ + chunkZ*16;
                             	
-                            	if(depth == 0)
-                            	{
-                            		//only checks depth once per 4x4 subchunk
-                            		if(subx == 0 && subz == 0)
-                            		{
-	                            		IBlockState currentBlock = chunkPrimerIn.getBlockState(localX, localY, localZ);
-	                            		//use isDigable to skip leaves/wood getting counted as surface
-	            						if(canReplaceBlock(currentBlock, AIR)) 
-	            						{
-	            							depth++;
-	            						}
-                            		}
-            						else
-            						{
-            							continue;
-            						}
-                            	}
-                            	else if(subx == 0 && subz == 0)
+//                            	if(depth == 0)
+//                            	{
+//                            		//only checks depth once per 4x4 subchunk
+//                            		if(subx == 0 && subz == 0)
+//                            		{
+//	                            		IBlockState currentBlock = chunkPrimerIn.getBlockState(localX, localY, localZ);
+//	                            		//use isDigable to skip leaves/wood getting counted as surface
+//	            						if(canReplaceBlock(currentBlock, AIR)) 
+//	            						{
+//	            							depth++;
+//	            						}
+//                            		}
+//            						else
+//            						{
+//            							continue;
+//            						}
+//                            	}
+                            	if(subx == 0 && subz == 0)
                             	{
                             		//already hit surface, simply increment depth counter
                             		depth++;
@@ -238,7 +240,34 @@ public class WorleyCaveGenerator extends MapGenCaves
 		}
     }
 	
-	public float[][][] sampleNoise(int chunkX, int chunkZ) 
+	private int[][] getSurfaceHeight(ChunkPrimer chunkPrimerIn) 
+	{
+		int[][] surfaceHeights = new int[5][5];
+		
+		for(int x = 0; x < 16; x += 4)
+		{
+			for(int z = 0; z < 16; z += 4)
+			{
+				for(int y = maxHeight; y > 0; y--)
+				{
+					IBlockState currentBlock = chunkPrimerIn.getBlockState(x, y, z);
+					if(canReplaceBlock(currentBlock, AIR)) 
+					{
+						surfaceHeights[x/4][z/4] = y;
+						break;
+					}
+				}	
+			}
+		}
+		
+		surfaceHeights[3][4] = surfaceHeights[3][3];
+		surfaceHeights[4][3] = surfaceHeights[3][3];
+		surfaceHeights[4][4] = surfaceHeights[3][3];
+		
+		return surfaceHeights;
+	}
+
+	public float[][][] sampleNoise(int chunkX, int chunkZ, int[][] surfaceHeight) 
 	{
 		float[][][] noiseSamples = new float[5][65][5];
 		float noise;
@@ -249,8 +278,9 @@ public class WorleyCaveGenerator extends MapGenCaves
 			{
 				int realZ = z*4 + chunkZ*16;
 				
+				int maxHeightNeeded = (surfaceHeight[x][z]+3)/2;
 				//loop from top down for y values so we can adjust noise above current y later on
-				for(int y = 64; y >= 0; y--)
+				for(int y = maxHeightNeeded; y >= 0; y--)
 				{
 					float realY = y*2;
 					
